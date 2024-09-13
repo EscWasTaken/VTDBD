@@ -1,0 +1,8 @@
+{
+  "cacheTimeout": 60,
+  "port": 8080,
+  "redisHost": "redis",
+  "apiKey": "YourAPIKeyHere",
+  "MetroGTFSRURL": "https://data-exchange-api.vicroads.vic.gov.au/opendata/v1/gtfsr/metrotrain-vehicleposition-updates",
+  "MetroTripsURL": "https://data-exchange-api.vicroads.vic.gov.au/opendata/v1/gtfsr/metrotrain-tripupdates"
+}
