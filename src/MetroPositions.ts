@@ -13,7 +13,7 @@ const FeedMessageType = root.lookupType('transit_realtime.FeedMessage');
 
 // Redis client initialization
 const redisClient = createClient({
-    url: process.env.REDIS_URL || config.redisUrl || 'redis://localhost:6379'
+    url: process.env.REDIS_URL || 'redis://localhost:6379'
 });
 redisClient.on('error', (err) => console.log('Redis Client Error', err));
 // Connect to Redis
@@ -25,7 +25,7 @@ redisClient.on('error', (err) => console.log('Redis Client Error', err));
 const gtfsUrl = config.MetroGTFSRURL;
 const apiKey = config.apiKey;
 
-export async function MetroGTFSR(res: Response) {
+export async function MetroPositions(res: Response) {
     const CACHE_KEY = 'TrainPositions';
     const CACHE_TTL = config.cacheTimeout; // Cache TTL in seconds
 
