@@ -21,6 +21,7 @@ export interface TripUpdate {
 export interface Entity {
     id: string;
     tripUpdate?: TripUpdate;
+    vehicle?: MetroVehicle;
 }
 
 export interface Header {
@@ -29,7 +30,7 @@ export interface Header {
     timestamp: string;
 }
 
-export interface MetroTripData {
+export interface MetroData {
     header: Header;
     entity: Entity[];
 }
@@ -54,3 +55,28 @@ export interface TrainStop {
     stop_lat: string;
     stop_lon: string;
 }
+
+// Positions Data
+export interface MetroVehicle {
+    trip: Trip;
+    position: Position;
+    timestamp: string;
+    vehicle?: Vehicle;
+
+}
+export interface Position {
+    latitude: number;
+    longitude: number;
+    bearing?: number;
+}
+export interface Vehicle {
+    id: string;
+}
+
+export interface Trip{
+        tripId: string;
+        headsign?: string; // Only in Augmented Data
+        startTime: string;
+        startDate: string;
+}
+

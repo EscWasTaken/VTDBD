@@ -25,7 +25,8 @@ redisClient.on('error', (err) => console.log('Redis Client Error', err));
 const gtfsUrl = config.MetroGTFSRURL;
 const apiKey = config.apiKey;
 
-export async function MetroPositions(res: Response) {
+export async function GetMetroPositions() {
+    let success : boolean;
     const CACHE_KEY = 'TrainPositions';
     const CACHE_TTL = config.cacheTimeout; // Cache TTL in seconds
 
@@ -36,7 +37,8 @@ export async function MetroPositions(res: Response) {
         if (cachedData) {
             // If cache hit, return the cached data
             console.log('train-GTFSR Retrieved From Redis Cache');
-            return res.json(JSON.parse(cachedData));
+            success = true;
+            return [success, cachedData];
         }
 
         // If cache miss, fetch data from the API
@@ -57,9 +59,21 @@ export async function MetroPositions(res: Response) {
         console.log(`train-GTFSR Retrieved From API and Cached`);
 
         // Respond with the decoded Protobuf data as JSON
-        res.json(feed);
-    } catch (error) {
+        success = true;
+        return [success, feed];
+    } catch (error: any) {
+        success = false;
         console.error('Error fetching GTFS real-time data:', error);
-        res.status(500).json({error: 'Failed to fetch GTFS real-time data'});
+        return [success, error.toString() ]
+    }
+}
+
+export async function MetroPositions(res: Response) {
+    const [success, value] = await GetMetroPositions()
+    if (success){
+        return res.json(JSON.parse(value));
+    }
+    else{
+        return res.status(500).json({error: value});
     }
 }

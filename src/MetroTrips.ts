@@ -1,10 +1,11 @@
-import { Response } from 'express';
+import {Response} from 'express';
 import axios from 'axios';
-import { createClient } from 'redis';
+import {createClient} from 'redis';
 import protobuf, {Message} from 'protobufjs';
 import * as path from 'path';
 import * as fs from 'fs';
-import {MetroTripData, TripStopSequence, TrainStop, TrainStopTimes} from './types';
+import {MetroData, TrainStop, TrainStopTimes, TripStopSequence} from './types';
+import {GetMetroPositions} from './MetroPositions';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf-8'));
 
@@ -82,7 +83,9 @@ export async function RawMetroTrips(res: Response) {
 
 }
 
-async function AugmentMetroTrips(value: string) {
+async function AugmentMetroTrips(rawTripsData: string, positionsData: MetroData) {
+
+
     // Get static data
     const [StaticMetroTrainTripsData, StaticMetroTrainsStopTimesData, StaticMetroTrainsStopsData] = await Promise.all([
         redisClient.get('StaticMetroTrainsTrips'),
@@ -94,6 +97,7 @@ async function AugmentMetroTrips(value: string) {
     const StaticMetroTrainsStopTimes: TrainStopTimes[] = JSON.parse(StaticMetroTrainsStopTimesData || '[]');
 
     // Parse StaticMetroTrainsStops correctly
+    // To be fixed up
     let StaticMetroTrainsStops: { [key: string]: TrainStop } = {};
     if (StaticMetroTrainsStopsData) {
         try {
@@ -121,32 +125,37 @@ async function AugmentMetroTrips(value: string) {
         return keys.find(key => key.endsWith('trip_id')) || '';
     }
 
+    // To remove
     const sampleEntry = StaticMetroTrainsStopTimes[0];
     const tripIdKey = getTripIdKey(sampleEntry);
 
-    // Now use this key in your filter
     function findStopsForTrip(tripID: string): TrainStopTimes[] {
         return StaticMetroTrainsStopTimes.filter(entry => entry[tripIdKey] === tripID);
     }
 
-    let data: MetroTripData = JSON.parse(value);
+    // I can probably condense this the same way I did with positionData
+    let tripData: MetroData = JSON.parse(rawTripsData);
 
-    if (data.entity && Array.isArray(data.entity)) {
-        data.entity.forEach((entity: any) => {
+    if (tripData.entity && Array.isArray(tripData.entity)) {
+        tripData.entity.forEach((entity: any) => {
             const tripID = entity.tripUpdate?.trip?.tripId;
-            if (tripID) {
-                // Find the corresponding trip in StaticMetroTrainTrips
-                const trips = StaticMetroTrainTrips.filter((trip: { trip_id: string }) => trip.trip_id === tripID);
+            if (tripID) { // If that trip exists
+                // Attach Vehicle Positions
+                const positions = positionsData.entity.find(train => { return train.vehicle?.trip.tripId === tripID });
+                if (positions){
+                    entity.vehicle = positions.vehicle;
+                }
 
+                // Attach Head sign For Trip
+                const trips = StaticMetroTrainTrips.filter((trip: { trip_id: string }) => trip.trip_id === tripID);
                 if (trips.length === 1) {
-                    // Assuming there's a single match, attach additional trip info
                     const matchedTrip = trips[0];
                     entity.tripUpdate.trip.headsign = matchedTrip.trip_headsign;
                 }
 
+                // Attach Stop Information
                 const foundStops = findStopsForTrip(tripID);
                 let dataStops: TripStopSequence[] = entity.tripUpdate.stopTimeUpdate;
-
                 dataStops.forEach((dataStop, index) => {
                     const stop = foundStops.find(stop => stop.stop_sequence === dataStop.stopSequence.toString());
                     if (stop) {
@@ -159,22 +168,28 @@ async function AugmentMetroTrips(value: string) {
                         }
                     }
                 });
-
                 entity.tripUpdate.stopTimeUpdate = dataStops;
             }
         });
     }
 
-    return data;
+    return tripData;
 }
 
 export async function CombinedMetroTrips(res: Response) {
-    const [success, value] = await GetRawMetroTripData()
-    if (success) {
-        let data = await AugmentMetroTrips(value);
+    const [successTrips, trips] = await GetRawMetroTripData()
+    const [successPos, positions] =  await GetMetroPositions()
+    if (successTrips && successPos) {
+        let data = await AugmentMetroTrips(trips, positions);
         return res.json(data);
     }
+    else if (successTrips && !successPos) {
+        return res.status(500).json({error: positions});
+    }
+    else if (!successTrips && successPos) {
+        return res.status(500).json({error: trips});
+    }
     else{
-        return res.status(500).json({error: value});
+        return res.status(500).json({error: trips, positions});
     }
 }
