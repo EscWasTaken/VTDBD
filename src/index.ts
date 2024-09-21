@@ -6,13 +6,18 @@ import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 
 // Import other project functions
-import { MetroTrips } from './MetroTrips';
-import { MetroGTFSR } from './MetroGTFSR';
+import {CombinedMetroTrips, RawMetroTrips, MetroPositions} from './MetroFunctions'
+//import {CombinedMetroTrips, RawMetroTrips} from './MetroTrips';
+//import { MetroPositions } from './MetroPositions';
+import { processGTFS } from './GTFSStatic';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf-8'));
 // If you want to change the port it is recommended to do so in the ./config.json file
 const PORT = config.port || 8080;
+processGTFS().then(() => console.log("GTFS Processed"))
 const app = express();
+
+// Grabs static data
 
 // Swagger definition
 const swaggerOptions: swaggerJsdoc.Options = {
@@ -20,7 +25,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
     openapi: '3.0.0',
     info: {
       title: 'VTDBD API',
-      version: '0.1.0',
+      version: '0.1.1',
       description: 'Victorian Transportation Data Broker & Distributor API',
     },
     servers: [
@@ -51,7 +56,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 /**
  * @openapi
- * /api/raw/train-GTFSR:
+ * /api/raw/metro/positions:
  *   get:
  *     summary: Retrieve GTFS real-time data for Metro trains
  *     description: Fetches GTFS real-time data from the Victorian government API, with Redis caching
@@ -132,14 +137,14 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
  *                 error:
  *                   type: string
  */
-app.get('/api/raw/train-GTFSR', async (_req: Request, res: Response) => {
-  console.log("Request on GET /api/raw/train-GTFSR");
-  return await MetroGTFSR(res);
+app.get('/api/raw/metro/positions', async (_req: Request, res: Response) => {
+  console.log("Request on GET /api/raw/metro/positions");
+  return await MetroPositions(res);
 });
 
 /**
  * @openapi
- * /api/raw/train-trips:
+ * /api/raw/metro/trips:
  *   get:
  *     summary: Retrieve trip update data for Metro trains
  *     description: Fetches trip update data from the Victorian government API, with Redis caching
@@ -204,9 +209,14 @@ app.get('/api/raw/train-GTFSR', async (_req: Request, res: Response) => {
  *                 error:
  *                   type: string
  */
-app.get('/api/raw/train-trips', async (_req: Request, res: Response) => {
+app.get('/api/raw/metro/trips', async (_req: Request, res: Response) => {
     console.log("Request on GET /api/raw/train-trips");
-    return await MetroTrips(res);
+    return await RawMetroTrips(res);
+});
+
+app.get('/api/metro', async (_req: Request, res: Response) => {
+  console.log("Request on GET /api/metro/trips");
+  return await CombinedMetroTrips(res);
 });
 
 // Start the server
