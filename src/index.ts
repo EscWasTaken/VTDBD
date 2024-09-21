@@ -6,14 +6,15 @@ import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 
 // Import other project functions
-import {CombinedMetroTrips, RawMetroTrips} from './MetroTrips';
-import { MetroPositions } from './MetroPositions';
+import {CombinedMetroTrips, RawMetroTrips, MetroPositions} from './MetroFunctions'
+//import {CombinedMetroTrips, RawMetroTrips} from './MetroTrips';
+//import { MetroPositions } from './MetroPositions';
 import { processGTFS } from './GTFSStatic';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf-8'));
 // If you want to change the port it is recommended to do so in the ./config.json file
 const PORT = config.port || 8080;
-processGTFS().then(r => console.log("GTFS Processed"))
+processGTFS().then(() => console.log("GTFS Processed"))
 const app = express();
 
 // Grabs static data
