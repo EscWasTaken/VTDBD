@@ -3,9 +3,10 @@ import path from 'path';
 import axios from 'axios';
 import AdmZip from 'adm-zip';
 import config from '../config.json';
-import {parseAndCacheStops, loadCSVToRedis} from './RedisCacher'
+import {cacheCSV, cacheStops, cacheJSON} from './RedisHandler'
+import {MetroRollingStock, Vehicle} from './MetroTypes'
 
-// This file is responsible for checking the existence of and downloading static GTFS data
+// This file is responsible for checking the existence of and downloading static GTFS data, as well as providing static data to API routes
 // Documentation for this data is available at https://data.ptv.vic.gov.au/downloads/GTFSReleaseNotes.pdf
 
 // Helper Functions
@@ -14,9 +15,17 @@ async function downloadFile(url: string, outputPath: string): Promise<void> {
     await fs.writeFile(outputPath, response.data);
 }
 
-async function unzip(zipPath: string, outputPath: string): Promise<void> {
-    const zip = new AdmZip(zipPath);
-    zip.extractAllTo(outputPath, true);
+async function unzip(zipPath: string, outputPath: string): Promise<boolean> {
+    try {
+        //console.log(`Attempting to unzip file: ${zipPath}`);
+        const zip = new AdmZip(zipPath);
+        zip.extractAllTo(outputPath, true);
+        //console.log(`File unzipped successfully to ${outputPath}`);
+        return true;
+    } catch (error) {
+        console.error(`Error unzipping file ${zipPath}:`, error);
+        return false;
+    }
 }
 
 export async function processGTFS(): Promise<void> {
@@ -34,7 +43,7 @@ export async function processGTFS(): Promise<void> {
 
         if (refreshStaticTimer === 0) {
             console.info('RefreshStaticTimer is 0. Always downloading GTFS.');
-            await downloadAndProcessGTFS();
+            await DownloadGTFS();
             return;
         }
 
@@ -49,7 +58,7 @@ export async function processGTFS(): Promise<void> {
 
         if (!folderExists || !fileExists) {
             console.info('GTFS Static folder or timestamp file does not exist. Proceeding with download.');
-            await downloadAndProcessGTFS();
+            await DownloadGTFS();
             return;
         }
 
@@ -59,25 +68,35 @@ export async function processGTFS(): Promise<void> {
 
         if (timestamp + refreshStaticTimer < currentTime) {
             console.info('Refresh time reached. Downloading new GTFS data.');
-            await downloadAndProcessGTFS();
+            await DownloadGTFS();
         } else {
             console.info('GTFS data is up to date. Skipping download.');
         }
+
         console.log('Caching File To Redis, This Might Take A Bit..');
         // Files that will be needed by functions
         let fileToSave;
         // Metro Trains
         fileToSave = path.join(__dirname, 'gtfs-static/2/stop_times.txt');
         console.log('Caching File:' + fileToSave);
-        await loadCSVToRedis(fileToSave, 'StaticMetroTrainsStopTimes');
+        await cacheCSV(fileToSave, 'StaticMetroTrainsStopTimes');
 
         fileToSave = path.join(__dirname, 'gtfs-static/2/stops.txt');
         console.log('Caching File:' + fileToSave);
-        await parseAndCacheStops(fileToSave, 'StaticMetroTrainsStops').catch(console.error);
+        await cacheStops(fileToSave, 'StaticMetroTrainsStops').catch(console.error);
 
         fileToSave = path.join(__dirname, 'gtfs-static/2/trips.txt');
         console.log('Caching File:' + fileToSave);
-        await loadCSVToRedis(fileToSave, 'StaticMetroTrainsTrips');
+        await cacheCSV(fileToSave, 'StaticMetroTrainsTrips');
+
+        fileToSave = path.join(__dirname, 'gtfs-static/2/routes.txt');
+        console.log('Caching File:' + fileToSave);
+        await cacheCSV(fileToSave, 'StaticMetroTrainsRoutes');
+
+        // Metro Rolling Stock
+        fileToSave = path.join(__dirname, 'gtfs-static/MetroRollingStock.json');
+        console.log('Caching File:' + fileToSave);
+        await cacheJSON(fileToSave, 'StaticMetroRollingStock');
 
         console.log("GTFS Static Complete");
     } catch (error) {
@@ -85,44 +104,59 @@ export async function processGTFS(): Promise<void> {
     }
 }
 
-async function downloadAndProcessGTFS(): Promise<void> {
-    // 1. Download zip file
-    const staticGTFSURL = config.StaticGTFSURL || 'https://data.ptv.vic.gov.au/downloads/gtfs.zip';
-    const zipFilePath = path.join(__dirname, 'gtfs.zip');
-    console.info('Downloading GTFS Static Data From: ' + staticGTFSURL);
-    await downloadFile(staticGTFSURL, zipFilePath);
-    console.info('Downloaded successfully');
+async function DownloadGTFS(): Promise<void> {
+    try {
+        const staticGTFSURL = config.StaticGTFSURL || 'https://data.ptv.vic.gov.au/downloads/gtfs.zip';
+        const zipFilePath = path.join(__dirname, 'gtfs.zip');
 
-    // 2. Unzip the file
-    console.info('Unzipping ' + zipFilePath);
-    const gtfsStaticPath = path.join(__dirname, 'gtfs-static');
-    await unzip(zipFilePath, gtfsStaticPath);
-    console.info('Successfully Unzipped');
+        console.log(`Downloading GTFS Static Data from: ${staticGTFSURL}`);
+        await downloadFile(staticGTFSURL, zipFilePath);
 
-    // 3. Remove the original zip file
-    console.info('Removing ' + zipFilePath);
-    await fs.unlink(zipFilePath);
-    console.info('Successfully Removed');
+        console.log('Unzipping main file');
+        const gtfsStaticPath = path.join(__dirname, 'gtfs-static');
+        const mainUnzipSuccess = await unzip(zipFilePath, gtfsStaticPath);
 
-    // 4. Loop over all folders in gtfs-static
-    console.info('Looping over all folders, Unzipping, Then Deleting');
-    const folders = await fs.readdir(gtfsStaticPath);
-    for (const folder of folders) {
-        const folderPath = path.join(gtfsStaticPath, folder);
-        const stat = await fs.stat(folderPath);
-
-        if (stat.isDirectory() && /^[1-9]|1[01]$/.test(folder)) {
-            // 5. Unzip google_transit.zip in each folder
-            const zipPath = path.join(folderPath, 'google_transit.zip');
-            await unzip(zipPath, folderPath);
-            await fs.unlink(zipPath);
+        if (!mainUnzipSuccess) {
+            console.error('Failed to unzip main GTFS file. Aborting further processing.');
+            return;
         }
-    }
 
-    // 6. Create timestamp file
-    const timestampFilePath = path.join(gtfsStaticPath, 'timestamp.txt');
-    const timestamp = Math.floor(Date.now() / 1000); // Current time in seconds
-    await fs.writeFile(timestampFilePath, `${timestamp}`);
-    console.log(`Timestamp file created at: ${timestampFilePath}`);
-    console.log('GTFS processing completed successfully.');
+        console.log('Removing ' + zipFilePath);
+        await fs.unlink(zipFilePath);
+        console.log('Successfully Removed');
+
+        console.log('Looping over all folders, Unzipping, Then Deleting');
+        const folders = await fs.readdir(gtfsStaticPath);
+        for (const folder of folders) {
+            const folderPath = path.join(gtfsStaticPath, folder);
+            const stat = await fs.stat(folderPath);
+
+            if (stat.isDirectory() && /^[1-9]|1[01]$/.test(folder)) {
+                const zipPath = path.join(folderPath, 'google_transit.zip');
+                const unzipSuccess = await unzip(zipPath, folderPath);
+                if (unzipSuccess) {
+                    await fs.unlink(zipPath);
+                } else {
+                    console.warn(`Failed to unzip ${zipPath}. Skipping deletion and continuing.`);
+                }
+            }
+        }
+
+        // Get Metro Rolling Stock JSON
+        const MetroRollingStockURL = config.MetroRollingStockURL || "https://raw.githubusercontent.com/EscWasTaken/Melbourne-Train-List/refs/heads/main/MelbourneTrains.json";
+        const MetroRollingStockFilePath = path.join(gtfsStaticPath, 'MetroRollingStock.json');
+        await downloadFile(MetroRollingStockURL, MetroRollingStockFilePath);
+        console.log(`Metro Rolling Stock file created at: ${MetroRollingStockFilePath}`);
+
+        // Create timestamp file
+        const timestampFilePath = path.join(gtfsStaticPath, 'timestamp.txt');
+        const timestamp = Math.floor(Date.now() / 1000);
+        await fs.writeFile(timestampFilePath, `${timestamp}`);
+        console.log(`Timestamp file created at: ${timestampFilePath}`);
+
+        console.log('GTFS processing completed successfully.');
+    } catch (error) {
+        console.error('Error Whilst Downloading GTFS Data:', error);
+        throw error;
+    }
 }

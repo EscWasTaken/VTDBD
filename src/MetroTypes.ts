@@ -71,6 +71,8 @@ export interface Position {
 }
 export interface Vehicle {
     id: string;
+    train?: MetroRollingStock;
+    notes?: string;
 }
 
 export interface Trip{
@@ -80,3 +82,13 @@ export interface Trip{
         startDate: string;
 }
 
+export enum MetroRollingStock {
+    // Current Rolling Stock
+    "Sprinter" = "Sprinter", // Sprinter Rail motors used on Stony Point Shuttle // https://vicsig.net/passenger/rollingstock/railmotors/Sprinter
+    "Comeng" = "Comeng", // Commonwealth Engineering //https://vicsig.net/suburban/train/Comeng
+    "Siemens" = "Siemens", // Siemens Nexas based off Siemens Modular Metro //https://vicsig.net/suburban/train/Siemens
+    "X'Trapolis" = "X'Trapolis", // Alstom X'Trapolis 100  //https://vicsig.net/suburban/train/X%27Trapolis
+    "HCMT" = "HCMT", // High Capacity Metro Train // https://vicsig.net/suburban/train/HCMT
+    // Future Rolling Stock
+    "X'Trapolis 2.0" = "X'Trapolis 2.0" // Alstom X'Trapolis 2.0 // https://en.wikipedia.org/wiki/X%27Trapolis_2.0
+}
