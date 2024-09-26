@@ -1,9 +1,10 @@
-  {
-    "port": 8080,
-    "apiKey": "YourAPIKeyHere",
-    "cacheTimeout": 60,
-    "RefreshStaticTimer": 3600,
-    "StaticGTFSURL": "https://data.ptv.vic.gov.au/downloads/gtfs.zip",
-    "MetroGTFSRURL": "https://data-exchange-api.vicroads.vic.gov.au/opendata/v1/gtfsr/metrotrain-vehicleposition-updates",
-    "MetroTripsURL": "https://data-exchange-api.vicroads.vic.gov.au/opendata/v1/gtfsr/metrotrain-tripupdates"
-  }
+{
+  "port": 8080,
+  "apiKey": "YourAPIKeyHere",
+  "cacheTimeout": 60,
+  "RefreshStaticTimer": 3600,
+  "StaticGTFSURL": "https://data.ptv.vic.gov.au/downloads/gtfs.zip",
+  "MetroGTFSRURL": "https://data-exchange-api.vicroads.vic.gov.au/opendata/v1/gtfsr/metrotrain-vehicleposition-updates",
+  "MetroTripsURL": "https://data-exchange-api.vicroads.vic.gov.au/opendata/v1/gtfsr/metrotrain-tripupdates",
+  "MetroRollingStockURL": "https://raw.githubusercontent.com/EscWasTaken/Melbourne-Train-List/refs/heads/main/MelbourneTrains.json"
+}

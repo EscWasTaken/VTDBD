@@ -4,7 +4,7 @@ import { createClient } from 'redis';
 import protobuf, { Message } from 'protobufjs';
 import * as path from 'path';
 import * as fs from 'fs';
-import { MetroData, TrainStop, TrainStopTimes, TripStopSequence } from './types';
+import { MetroData, TrainStop, TrainStopTimes, TripStopSequence, MetroRollingStock } from './MetroTypes';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf-8'));
 
@@ -38,7 +38,7 @@ export async function GetMetroPositions() {
 
         if (cachedData) {
             // If cache hit, return the cached data
-            console.log('train-GTFSR Retrieved From Redis Cache');
+            //console.log('train-GTFSR Retrieved From Redis Cache');
             success = true;
             return [success, cachedData];
         }
@@ -58,7 +58,7 @@ export async function GetMetroPositions() {
 
         // Cache the decoded data
         await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(feed));
-        console.log(`train-GTFSR Retrieved From API and Cached`);
+        //console.log(`train-GTFSR Retrieved From API and Cached`);
 
         // Respond with the decoded Protobuf data as JSON
         success = true;
@@ -73,7 +73,7 @@ export async function GetMetroPositions() {
 export async function MetroPositions(res: Response) {
     const [success, value] = await GetMetroPositions();
     if (success) {
-        return res.json(JSON.parse(value));
+        return res.json(value);
     } else {
         return res.status(500).json({ error: value });
     }
@@ -90,7 +90,7 @@ async function GetRawMetroTripData() {
 
         if (cachedData) {
             // If cache hit, return the cached data
-            console.log('train-trips Retrieved From Redis Cache');
+            //console.log('train-trips Retrieved From Redis Cache');
             success = true;
             return [success, cachedData];
         }
@@ -111,7 +111,7 @@ async function GetRawMetroTripData() {
         const data: string = JSON.stringify(feed);
         // Cache the decoded data
         await redisClient.setEx(CACHE_KEY, CACHE_TTL, data);
-        console.log(`train-trips Retrieved From API and Cached`);
+        //console.log(`train-trips Retrieved From API and Cached`);
 
         // Respond with the decoded Protobuf data as JSON
         success = true;
@@ -166,8 +166,8 @@ async function AugmentMetroTrips(rawTripsData: string, positionsData: any) {
 
     if (Array.isArray(positionsEntity)) {
         positionsEntity.forEach(entity => {
-            if (entity.vehicle?.trip?.tripId) {
-                positionsMap.set(entity.vehicle.trip.tripId, entity.vehicle);
+            if (entity.id) {
+                positionsMap.set(entity.id, entity.vehicle);
             }
         });
     }
@@ -176,25 +176,26 @@ async function AugmentMetroTrips(rawTripsData: string, positionsData: any) {
         return Object.keys(obj).find(key => key.endsWith('trip_id')) || '';
     }
 
-    let tripData: MetroData = typeof rawTripsData === 'string' ? JSON.parse(rawTripsData) : rawTripsData;
+    let tripData: MetroData = JSON.parse(rawTripsData);
 
     if (tripData.entity && Array.isArray(tripData.entity)) {
         tripData.entity.forEach((entity: any) => {
+            const entityID = entity.id;
             const tripID = entity.tripUpdate?.trip?.tripId;
-            if (tripID) {
-                // Attach Vehicle Positions
-                const position = positionsMap.get(tripID);
-                if (position) {
-                    entity.vehicle = position;
+            if (entityID) {
+                // Attach Vehicle Positions from GTFSR Positions
+                const liveVehicle = positionsMap.get(entityID);
+                if (liveVehicle) {
+                    entity.vehicle = liveVehicle;
                 }
 
-                // Attach Head sign For Trip
+                // Attach Head sign For Trip from Static GTFS
                 const trip = StaticMetroTrainTrips.get(tripID);
                 if (trip) {
                     entity.tripUpdate.trip.headsign = trip.trip_headsign;
                 }
 
-                // Attach Stop Information
+                // Attach Stop Information from Static GTFS
                 const foundStops = StaticMetroTrainsStopTimes.get(tripID) || [];
                 let dataStops: TripStopSequence[] = entity.tripUpdate.stopTimeUpdate;
                 dataStops.forEach((dataStop) => {
@@ -232,3 +233,8 @@ export async function CombinedMetroTrips(res: Response) {
         return res.status(500).json({ error: trips, positions });
     }
 }
+
+async function IdentifyTrains(carriageString: string) {
+
+}
+

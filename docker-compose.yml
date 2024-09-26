@@ -12,6 +12,6 @@ services:
       - .:/app
     command: npm run dev
   redis:
-    image: "redis:alpine"
+    image: "redis/redis-stack"
     ports:
       - "6379:6379"
