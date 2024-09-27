@@ -4,7 +4,7 @@ import { createClient } from 'redis';
 import protobuf, { Message } from 'protobufjs';
 import * as path from 'path';
 import * as fs from 'fs';
-import { MetroData, TrainStop, TrainStopTimes, TripStopSequence, MetroRollingStock } from './MetroTypes';
+import { MetroData, TrainStop, TrainStopTimes, TripStopSequence } from './MetroTypes';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf-8'));
 
